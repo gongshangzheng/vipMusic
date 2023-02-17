@@ -1,6 +1,7 @@
 # --*-- coding:utf-8 --*--
 import requests
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.keys import Keys  # 输入框回车
 from selenium.webdriver.common.by import By  # 与下面的2个都是等待时要用到
 from selenium.webdriver.support.ui import WebDriverWait
@@ -59,14 +60,38 @@ class NetEaseCloud(object):
                 except:
                     pass
             # print("没到这儿吗")
-            is_index = int(input("\n选择下载序号>>").strip())
-            if is_index < 0:
-                print("您已取消该歌曲的下载")
-                return None
-            song_id = re.compile('htt.*?id\=(\d+)').findall(ids[is_index-1])[0]  # 将歌曲id匹配出来
-            song_name = titles[is_index-1]
+            # is_index = int(input("\n选择下载序号>>").strip())
+            #
+            is_index = input("\n选择下载序号(支持多数字输入，以及“-”表示范围，用空格隔开)>>").strip()
+            pattern1 = re.compile(r'(\d+)-(\d+)')
+            pattern2 = re.compile(r'(\d+)')
+            matches1 = pattern1.findall(is_index)
+            matches2 = pattern2.findall(is_index)
+            indexs = []
+            for match1 in matches1:
+                start = match1[0]
+                end = match1[1]
+                indexs.extend(range(int(start), int(end) + 1))
+            for match2 in matches2:
+                start = match2[0]
+                indexs.append(int(start))
+            indexs = sorted(set(indexs))
+            song_id = []
+            song_name = []
+            for index in indexs:
+                if index < 0:
+                    print("您已取消该歌曲的下载")
+                    return None
+                song_id.append(re.compile('htt.*?id\=(\d+)').findall(ids[index-1])[0])  # 将歌曲id匹配出来
+                song_name.append(titles[index-1])
+            # if is_index < 0:
+            #     print("您已取消该歌曲的下载")
+            #     return None
+            # song_id = re.compile('htt.*?id\=(\d+)').findall(ids[is_index-1])[0]  # 将歌曲id匹配出来
+            # song_name = titles[is_index-1]
             # print("正在下载......")
             return song_id, song_name
+
         except TimeoutException:
             print("网络不佳，请重新下载")
             return None
@@ -104,7 +129,7 @@ class NetEaseCloud(object):
 
     def test(self, song_name):
         songs_name = []
-        remove_str = ['/', '\\']
+        remove_str = ['/', '\\', '\'']
         for name in song_name:
             if name not in remove_str:
                 songs_name.append(name)
@@ -118,7 +143,7 @@ class NetEaseCloud(object):
         print("\n", "{:30}".format("正在使用网易云音乐VIP下载器"))
         try:
             url = "https://music.163.com/#/search/m/?s=长安忆&type=1"
-            driver.get(url)
+            # driver.get(url)
         except:
             print("网络连接异常！")
             return   # 利用return阻断程序
@@ -142,12 +167,13 @@ class NetEaseCloud(object):
                     except NoSuchElementException:
                         print("\n没有找到相关资源QAQ")
                         return   # 设置阻断
-                    song_id, song_name = self.get_id()  # 此时的song_name可能含有字符/,写文件时会报路径错误，所以要想验证
-                    if song_id is None or song_name is None:
+                    song_ids, song_names = self.get_id()  # 此时的song_name可能含有字符/,写文件时会报路径错误，所以要想验证
+                    if song_ids is None or song_names is None:
                         break  # 这个None是用户不想下载时返回的
                     else:
-                        song_name = self.test(song_name)  # 若含有/或者\则转化为&
-                        self.download(song_id, song_name)
+                        for i in range(len(song_names)):
+                            song_names[i] = self.test(song_names[i])  # 若含有/或者\则转化为&
+                            self.download(song_ids[i], song_names[i])
         except Exception as er:
             print("检测到异常错误\n退出网易云音乐下载 ", er)
 
@@ -184,29 +210,50 @@ class KuGou(object):
             try:
                 for i in range(10):
                     print(str(i + 1) + "    " + str(data[i]['FileName']).replace('<em>', '').replace('</em>', ''))
-                number = int(input("\n请选择歌曲序号>> "))
-                if number <= 0:
-                    print("请检查输入是否符合规范\n退出酷狗下载")
-                    break
-                try:
-                    name = str(data[number - 1]['FileName']).replace('<em>', '').replace('</em>', '')
-                    fhash = re.findall('"FileHash":"(.*?)"', res)[number - 1]
-                    hash_url = "http://www.kugou.com/yy/index.php?r=play/getdata&hash=" + fhash
-                    hash_content = requests.get(hash_url)
-                    play_url = ''.join(re.findall('"play_url":"(.*?)"', hash_content.text))
-                    real_download_url = play_url.replace("\\", "")
-                except TimeoutError:
-                    print("网络不佳，请重新下载")
-                    break
-                try:
-                    save_path = "./music/"+name+".mp3"
-                    true_path = os.path.abspath(save_path)
-                    print("下载中.....")
-                    with open("./music/"+name+".mp3", "wb")as fp:
-                        fp.write(requests.get(real_download_url).content)
-                    print("{}已保存至{}".format(name, true_path))
-                except:
-                    print("未找到文件夹music\n退出酷狗下载")
+                is_index = input("\n选择下载序号(支持多数字输入，以及“-”表示范围，用空格隔开)>>").strip()
+                pattern1 = re.compile(r'(\d+)-(\d+)')
+                pattern2 = re.compile(r'(\d+)')
+                matches1 = pattern1.findall(is_index)
+                matches2 = pattern2.findall(is_index)
+                indexs = []
+                for match1 in matches1:
+                    start = match1[0]
+                    end = match1[1]
+                    indexs.extend(range(int(start), int(end) + 1))
+                for match2 in matches2:
+                    start = match2[0]
+                    indexs.append(int(start))
+                indexs = sorted(set(indexs))
+                # number = int(input("\n请选择歌曲序号>> "))
+                for number in indexs:
+                    if number <= 0:
+                        print("请检查输入是否符合规范\n退出酷狗下载")
+                        break
+                    try:
+                        name = str(data[number - 1]['FileName']).replace('<em>', '').replace('</em>', '')
+                        fhash = re.findall('"FileHash":"(.*?)"', res)[number - 1]
+                        hash_url = "http://www.kugou.com/yy/index.php?r=play/getdata&hash=" + fhash
+                        hash_content = requests.get(hash_url)
+                        play_url = ''.join(re.findall('"play_url":"(.*?)"', hash_content.text))
+                        real_download_url = play_url.replace("\\", "")
+                    except TimeoutError:
+                        print("网络不佳，请重新下载")
+                        break
+                    try:
+                        if not os.path.exists("./music/"):
+                            os.makedirs("./music/")
+                        save_path = "./music/"+name+".mp3"
+                        true_path = os.path.abspath(save_path)
+                        print(name + "下载中.....")
+                        if os.path.exists(save_path):
+                            continue
+                        with open("./music/"+name+".mp3", "wb")as fp:
+                            fp.write(requests.get(real_download_url).content)
+                        print("{}已保存至{}".format(name, true_path))
+                    except:
+                        print("未找到文件夹music\n退出酷狗下载")
+                # 下载成功后退出程序
+                print("下载完毕")
             except:
                 print("异常错误，请重新下载")
 
@@ -333,7 +380,13 @@ if __name__ == '__main__':
         chrome_options = Options()
         chrome_options.add_argument('--headless')
         chrome_options.add_argument('--disable-gpu')
-        driver = webdriver.Chrome(executable_path='./chromedriver', chrome_options=chrome_options)
+        chrome_options.add_experimental_option("prefs", {
+            "profile.default_content_setting_values.logging_levels": {
+            "browser": "OFF"
+            }})
+        s = Service('chromedriver.exe')
+        # driver = webdriver.Chrome(executable_path='./chromedriver', options=chrome_options)
+        driver = webdriver.Chrome(service=s, options=chrome_options)
         wait = WebDriverWait(driver, 15)
     except Exception as e:
         print("请先安装最新版Chrome浏览器!", e)
@@ -343,12 +396,12 @@ if __name__ == '__main__':
             player = input("请选择播放源>>").strip()
             if player == 'q':
                 print("退出VIP音乐破解")
-                exit()
+                break
             elif player == '':
                 continue
             elif int(player) not in [1,2,3]:
-                print("请正确输入序号\n退出VIP下载")
-                break
+                print("请正确输入序号\n")
+                continue
             elif int(player) == 1:
                 kg_API.download()
             elif int(player) == 2:
@@ -357,5 +410,7 @@ if __name__ == '__main__':
                 qq_API.qq_music_api()
         except:
             print("请检查输入是否符合规范")
+    
+    exit()
 
 
